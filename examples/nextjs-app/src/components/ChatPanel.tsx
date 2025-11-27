@@ -5,6 +5,12 @@ import { ChatMessage, GraphState, ChatResponse } from '@/lib/types';
 import { getDemoLLMConfig } from '@/lib/demo-mode';
 import { processChatClientSide } from '@/lib/client-chat';
 
+// Welcome message content for different modes
+const WELCOME_MESSAGE_DEMO =
+  "Hello! I'm your architecture assistant running in demo mode. To use AI features, click the Settings button above to configure your OpenAI API key. You can still manually edit the diagram!";
+const WELCOME_MESSAGE_NORMAL =
+  'Hello! I\'m your architecture assistant. Describe the system you want to design, and I\'ll help you create a visual architecture diagram. Try something like: "Add an API Gateway that connects to a UserService and AuthService"';
+
 interface ChatPanelProps {
   graphState: GraphState;
   onGraphUpdate: (newState: GraphState) => void;
@@ -20,9 +26,7 @@ export default function ChatPanel({
     {
       id: 'welcome',
       role: 'assistant',
-      content: isDemoMode
-        ? 'Hello! I\'m your architecture assistant running in demo mode. To use AI features, click the Settings button above to configure your OpenAI API key. You can still manually edit the diagram!'
-        : 'Hello! I\'m your architecture assistant. Describe the system you want to design, and I\'ll help you create a visual architecture diagram. Try something like: "Add an API Gateway that connects to a UserService and AuthService"',
+      content: isDemoMode ? WELCOME_MESSAGE_DEMO : WELCOME_MESSAGE_NORMAL,
       timestamp: new Date().toISOString(),
     },
   ]);

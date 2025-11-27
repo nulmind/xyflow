@@ -35,6 +35,10 @@ export async function callLLMFromBrowser(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      // WARNING: Exposing API keys in client-side code is insecure!
+      // The API key will be visible to anyone with access to the browser's DevTools or network traffic.
+      // This pattern is for demo purposes only and MUST NOT be used in production.
+      // Never expose sensitive API keys in client-side code.
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
