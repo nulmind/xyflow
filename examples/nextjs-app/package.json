@@ -10,7 +10,9 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "build:demo": "cp .env.demo .env.local && next build",
+    "export:demo": "npm run build:demo"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
