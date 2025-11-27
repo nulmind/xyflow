@@ -9,8 +9,10 @@ import { GraphState, createEmptyGraphState } from '@/lib/types';
 import { isDemoModeEnabled } from '@/lib/demo-mode';
 import { getStorageAdapter } from '@/lib/storage';
 
-// Height of the demo mode banner in pixels (e.g., 'top-10' = 40px)
-const DEMO_BANNER_HEIGHT = 10;
+// Tailwind class for error banner position when demo mode banner is visible
+// Note: This is defined as a constant to document the magic value and for maintainability.
+// The class 'top-10' corresponds to the height of the demo mode banner.
+const DEMO_BANNER_TOP_CLASS = 'top-10';
 
 export default function Home() {
   const [graphState, setGraphState] = useState<GraphState | null>(null);
@@ -163,7 +165,7 @@ export default function Home() {
 
       {/* Error banner */}
       {error && (
-        <div className={`absolute left-0 right-0 bg-yellow-50 border-b border-yellow-200 px-4 py-2 text-sm text-yellow-800 z-50 ${isDemoMode ? `top-${DEMO_BANNER_HEIGHT}` : 'top-0'}`}>
+        <div className={`absolute left-0 right-0 bg-yellow-50 border-b border-yellow-200 px-4 py-2 text-sm text-yellow-800 z-50 ${isDemoMode ? DEMO_BANNER_TOP_CLASS : 'top-0'}`}>
           {error}
           <button
             onClick={() => setError(null)}
