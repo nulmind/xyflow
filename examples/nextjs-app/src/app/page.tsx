@@ -4,27 +4,49 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { ReactFlowProvider } from '@xyflow/react';
 import ChatPanel from '@/components/ChatPanel';
 import GraphCanvas from '@/components/GraphCanvas';
+import DemoModeSettings from '@/components/DemoModeSettings';
 import { GraphState, createEmptyGraphState } from '@/lib/types';
+import { isDemoModeEnabled } from '@/lib/demo-mode';
+import { getStorageAdapter } from '@/lib/storage';
 
 export default function Home() {
   const [graphState, setGraphState] = useState<GraphState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isDemoMode, setIsDemoMode] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Check demo mode on mount
+  useEffect(() => {
+    setIsDemoMode(isDemoModeEnabled());
+  }, []);
 
   // Load initial graph state
   useEffect(() => {
     async function loadGraph() {
       try {
-        const response = await fetch('/api/graph');
-        if (!response.ok) {
-          throw new Error('Failed to load graph');
+        if (isDemoMode) {
+          // Load from localStorage
+          const storage = getStorageAdapter();
+          const data = await storage.getGraphState();
+          setGraphState(data);
+        } else {
+          // Load from backend API
+          const response = await fetch('/api/graph');
+          if (!response.ok) {
+            throw new Error('Failed to load graph');
+          }
+          const data = await response.json();
+          setGraphState(data);
         }
-        const data = await response.json();
-        setGraphState(data);
       } catch (err) {
         console.error('Error loading graph:', err);
-        setError('Failed to load graph. Using empty state.');
+        setError(
+          isDemoMode
+            ? 'Failed to load graph from storage. Using empty state.'
+            : 'Failed to load graph from server. Using empty state.'
+        );
         setGraphState(createEmptyGraphState('default-project'));
       } finally {
         setIsLoading(false);
@@ -32,24 +54,34 @@ export default function Home() {
     }
 
     loadGraph();
-  }, []);
+  }, [isDemoMode]);
 
-  // Save graph state to backend (debounced)
-  const saveGraphState = useCallback(async (state: GraphState) => {
-    try {
-      const response = await fetch('/api/graph', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(state),
-      });
+  // Save graph state (to localStorage or backend)
+  const saveGraphState = useCallback(
+    async (state: GraphState) => {
+      try {
+        if (isDemoMode) {
+          // Save to localStorage
+          const storage = getStorageAdapter();
+          await storage.saveGraphState(state);
+        } else {
+          // Save to backend API
+          const response = await fetch('/api/graph', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(state),
+          });
 
-      if (!response.ok) {
-        console.error('Failed to save graph');
+          if (!response.ok) {
+            console.error('Failed to save graph');
+          }
+        }
+      } catch (err) {
+        console.error('Error saving graph:', err);
       }
-    } catch (err) {
-      console.error('Error saving graph:', err);
-    }
-  }, []);
+    },
+    [isDemoMode]
+  );
 
   // Handle graph changes with debounced save
   const handleGraphChange = useCallback(
@@ -68,13 +100,17 @@ export default function Home() {
     [saveGraphState]
   );
 
-  // Handle graph update from chat (immediate save)
+  // Handle graph update from chat
   const handleGraphUpdate = useCallback(
     (newState: GraphState) => {
       setGraphState(newState);
-      // Don't need to save here - the chat API already saves
+      // In demo mode, save immediately
+      if (isDemoMode) {
+        saveGraphState(newState);
+      }
+      // In backend mode, chat API already saves
     },
-    []
+    [isDemoMode, saveGraphState]
   );
 
   if (isLoading) {
@@ -106,9 +142,25 @@ export default function Home() {
 
   return (
     <main className="h-screen flex overflow-hidden">
+      {/* Demo mode banner */}
+      {isDemoMode && (
+        <div className="absolute top-0 left-0 right-0 bg-blue-50 border-b border-blue-200 px-4 py-2 text-sm text-blue-800 z-50 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold">📱 Demo Mode</span>
+            <span>- Data stored in browser only</span>
+          </div>
+          <button
+            onClick={() => setShowSettings(true)}
+            className="px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 transition-colors"
+          >
+            ⚙️ Settings
+          </button>
+        </div>
+      )}
+
       {/* Error banner */}
       {error && (
-        <div className="absolute top-0 left-0 right-0 bg-yellow-50 border-b border-yellow-200 px-4 py-2 text-sm text-yellow-800 z-50">
+        <div className={`absolute left-0 right-0 bg-yellow-50 border-b border-yellow-200 px-4 py-2 text-sm text-yellow-800 z-50 ${isDemoMode ? 'top-10' : 'top-0'}`}>
           {error}
           <button
             onClick={() => setError(null)}
@@ -119,9 +171,19 @@ export default function Home() {
         </div>
       )}
 
+      {/* Settings modal */}
+      <DemoModeSettings
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+      />
+
       {/* Left panel - Chat */}
       <div className="w-[400px] min-w-[350px] max-w-[500px] flex-shrink-0">
-        <ChatPanel graphState={graphState} onGraphUpdate={handleGraphUpdate} />
+        <ChatPanel
+          graphState={graphState}
+          onGraphUpdate={handleGraphUpdate}
+          isDemoMode={isDemoMode}
+        />
       </div>
 
       {/* Right panel - Graph Canvas */}

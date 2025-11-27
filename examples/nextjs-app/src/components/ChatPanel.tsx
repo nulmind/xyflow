@@ -2,19 +2,27 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { ChatMessage, GraphState, ChatResponse } from '@/lib/types';
+import { getDemoLLMConfig } from '@/lib/demo-mode';
+import { processChatClientSide } from '@/lib/client-chat';
 
 interface ChatPanelProps {
   graphState: GraphState;
   onGraphUpdate: (newState: GraphState) => void;
+  isDemoMode?: boolean;
 }
 
-export default function ChatPanel({ graphState, onGraphUpdate }: ChatPanelProps) {
+export default function ChatPanel({
+  graphState,
+  onGraphUpdate,
+  isDemoMode = false,
+}: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome',
       role: 'assistant',
-      content:
-        'Hello! I\'m your architecture assistant. Describe the system you want to design, and I\'ll help you create a visual architecture diagram. Try something like: "Add an API Gateway that connects to a UserService and AuthService"',
+      content: isDemoMode
+        ? 'Hello! I\'m your architecture assistant running in demo mode. To use AI features, click the Settings button above to configure your OpenAI API key. You can still manually edit the diagram!'
+        : 'Hello! I\'m your architecture assistant. Describe the system you want to design, and I\'ll help you create a visual architecture diagram. Try something like: "Add an API Gateway that connects to a UserService and AuthService"',
       timestamp: new Date().toISOString(),
     },
   ]);
@@ -47,30 +55,63 @@ export default function ChatPanel({ graphState, onGraphUpdate }: ChatPanelProps)
       setIsLoading(true);
 
       try {
-        const response = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message,
-            graphState,
-          }),
-        });
+        let assistantContent: string;
+        let newGraphState: GraphState | undefined;
 
-        const data: ChatResponse & { error?: string } = await response.json();
+        if (isDemoMode) {
+          // Client-side processing for demo mode
+          const llmConfig = getDemoLLMConfig();
+
+          if (!llmConfig.apiKey) {
+            assistantContent =
+              'Please configure your OpenAI API key in Settings to use AI features.';
+          } else {
+            try {
+              const result = await processChatClientSide({
+                message,
+                graphState,
+                llmConfig: {
+                  apiKey: llmConfig.apiKey,
+                  model: llmConfig.model,
+                  baseUrl: llmConfig.baseUrl,
+                },
+              });
+
+              assistantContent = result.assistantMessage;
+              newGraphState = result.graphState;
+            } catch (error) {
+              assistantContent = `Error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+            }
+          }
+        } else {
+          // Server-side processing for normal mode
+          const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              message,
+              graphState,
+            }),
+          });
+
+          const data: ChatResponse & { error?: string } = await response.json();
+          assistantContent = data.assistantMessage || data.error || 'Something went wrong.';
+          newGraphState = data.graphState;
+        }
 
         // Add assistant message
         const assistantMessage: ChatMessage = {
           id: `assistant-${Date.now()}`,
           role: 'assistant',
-          content: data.assistantMessage || data.error || 'Something went wrong.',
+          content: assistantContent,
           timestamp: new Date().toISOString(),
         };
 
         setMessages((prev) => [...prev, assistantMessage]);
 
         // Update graph state if we got a new one
-        if (data.graphState) {
-          onGraphUpdate(data.graphState);
+        if (newGraphState) {
+          onGraphUpdate(newGraphState);
         }
       } catch (error) {
         console.error('Chat error:', error);
@@ -85,7 +126,7 @@ export default function ChatPanel({ graphState, onGraphUpdate }: ChatPanelProps)
         setIsLoading(false);
       }
     },
-    [inputValue, isLoading, graphState, onGraphUpdate]
+    [inputValue, isLoading, graphState, onGraphUpdate, isDemoMode]
   );
 
   const handleKeyDown = useCallback(
