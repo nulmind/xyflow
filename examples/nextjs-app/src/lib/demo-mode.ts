@@ -62,7 +62,18 @@ export function getDemoLLMConfig(): { apiKey?: string; model?: string; baseUrl?:
     try {
       const stored = localStorage.getItem(DEMO_LLM_CONFIG_KEY);
       if (stored) {
-        return JSON.parse(stored);
+        const parsed = JSON.parse(stored);
+        if (
+          parsed &&
+          typeof parsed === 'object' &&
+          !Array.isArray(parsed) &&
+          (parsed.apiKey === undefined || typeof parsed.apiKey === 'string') &&
+          (parsed.model === undefined || typeof parsed.model === 'string') &&
+          (parsed.baseUrl === undefined || typeof parsed.baseUrl === 'string')
+        ) {
+          return parsed;
+        }
+        // If validation fails, fall through to return {}
       }
     } catch (error) {
       console.error('Failed to get demo LLM config:', error);
